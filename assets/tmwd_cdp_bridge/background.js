@@ -1,18 +1,24 @@
 // background.js - Cookie + CDP Bridge
+// Do NOT strip Content-Security-Policy from page responses.
+//
+// Earlier versions installed DNR rule 9999 which removed
+// `content-security-policy` / `content-security-policy-report-only` from every
+// main_frame and sub_frame. That breaks any site that actually relies on its
+// CSP (report-uri / nonce based initialisation): Google search hangs on its
+// loading spinner, and google-hosted apps that embed an appspot.com iframe end
+// up blank. Verified on Chrome 155.
+//
+// The extension does not need it: the `cdp` command drives chrome.debugger,
+// which bypasses CSP by design.
+//
+// The listeners below stay so the legacy rule is cleaned up on install/startup
+// for users upgrading from an older version.
 chrome.runtime.onInstalled.addListener(() => {
   console.log('CDP Bridge installed');
-  // Strip CSP headers to allow eval/inline scripts
-  chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [9999],
-    addRules: [{
-      id: 9999, priority: 1,
-      action: { type: 'modifyHeaders', responseHeaders: [
-        { header: 'content-security-policy', operation: 'remove' },
-        { header: 'content-security-policy-report-only', operation: 'remove' }
-      ]},
-      condition: { urlFilter: '*', resourceTypes: ['main_frame', 'sub_frame'] }
-    }]
-  });
+  chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [9999] });
+});
+chrome.runtime.onStartup.addListener(() => {
+  chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [9999] });
 });
 
 async function handleExtMessage(msg, sender) {
